@@ -12,6 +12,8 @@ const TEXTURES = {
 const VIEW_LIGHT_DIRECTION = new THREE.Vector3(-0.9, 0.2, 0.38).normalize();
 export const EARTH_TUNING_PRESET = Object.freeze({
   atmosphereColor: "#0033ff",
+  atmosphereShellSize: 1.018,
+  atmosphereShellStrength: 0,
   blackRimStrength: 0.98,
   cameraZ: 5.45,
   cloudContrast: 0.88,
@@ -520,6 +522,53 @@ function createInnerAtmosphereMaterial(lightDirection, settings) {
   });
 }
 
+function createAtmosphereShellMaterial(lightDirection, settings) {
+  return new THREE.ShaderMaterial({
+    depthTest: false,
+    depthWrite: false,
+    transparent: true,
+    uniforms: {
+      atmosphereColor: { value: new THREE.Color(settings.atmosphereColor) },
+      atmosphereShellStrength: { value: settings.atmosphereShellStrength },
+      lightDirection: { value: lightDirection },
+    },
+    vertexShader: `
+      varying vec3 vViewNormal;
+      varying vec3 vWorldNormal;
+
+      void main() {
+        vViewNormal = normalize(normalMatrix * normal);
+        vWorldNormal = normalize(mat3(modelMatrix) * normal);
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }
+    `,
+    fragmentShader: `
+      uniform vec3 atmosphereColor;
+      uniform float atmosphereShellStrength;
+      uniform vec3 lightDirection;
+      varying vec3 vViewNormal;
+      varying vec3 vWorldNormal;
+
+      void main() {
+        vec3 viewNormal = normalize(vViewNormal);
+        vec3 worldNormal = normalize(vWorldNormal);
+        float viewFacing = max(dot(viewNormal, vec3(0.0, 0.0, 1.0)), 0.0);
+        float viewRim = 1.0 - viewFacing;
+        float day = smoothstep(-0.22, 0.76, dot(worldNormal, normalize(lightDirection)));
+        float nightFade = smoothstep(-0.34, 0.16, dot(worldNormal, normalize(lightDirection)));
+        float broadGlass = pow(viewRim, 1.9) * 0.32;
+        float innerWash = pow(viewRim, 3.8) * 0.46;
+        float horizonBand = smoothstep(0.54, 0.94, viewRim) * 0.42;
+        float alpha = (broadGlass + innerWash + horizonBand) * day * nightFade * atmosphereShellStrength;
+        vec3 color = mix(atmosphereColor * 0.56, vec3(0.24, 0.72, 1.0), day);
+
+        gl_FragColor = vec4(color, clamp(alpha, 0.0, 0.24));
+        #include <colorspace_fragment>
+      }
+    `,
+  });
+}
+
 function createCompositePass(renderer, isMobile) {
   const target = new THREE.WebGLRenderTarget(1, 1, {
     depthBuffer: true,
@@ -767,6 +816,13 @@ export async function createHeroEarth({
   atmosphere.renderOrder = 5;
   system.add(atmosphere);
 
+  const atmosphereShell = new THREE.Mesh(
+    new THREE.SphereGeometry(1.018, isMobile ? 72 : 112, isMobile ? 48 : 72),
+    createAtmosphereShellMaterial(lightDirection, tuning),
+  );
+  atmosphereShell.renderOrder = 6;
+  system.add(atmosphereShell);
+
   const edgeShadow = new THREE.Mesh(
     new THREE.SphereGeometry(1.017, isMobile ? 72 : 112, isMobile ? 48 : 72),
     createEdgeShadowMaterial(tuning),
@@ -827,10 +883,13 @@ export async function createHeroEarth({
     innerAtmosphere.material.uniforms.innerAtmosphereStrength.value = tuning.innerAtmosphereStrength;
     atmosphere.material.uniforms.atmosphereColor.value.set(tuning.atmosphereColor);
     atmosphere.material.uniforms.outerAtmosphereStrength.value = tuning.outerAtmosphereStrength;
+    atmosphereShell.material.uniforms.atmosphereColor.value.set(tuning.atmosphereColor);
+    atmosphereShell.material.uniforms.atmosphereShellStrength.value = tuning.atmosphereShellStrength;
     edgeShadow.material.uniforms.blackRimStrength.value = tuning.blackRimStrength;
 
     innerAtmosphere.scale.setScalar(Math.max(tuning.innerAtmosphereSize, 1));
     atmosphere.scale.setScalar(Math.max(tuning.outerAtmosphereSize, 1));
+    atmosphereShell.scale.setScalar(Math.max(tuning.atmosphereShellSize, 1));
     render();
   }
 
@@ -900,6 +959,7 @@ export async function createHeroEarth({
         cloudGeometry,
         innerAtmosphere.geometry,
         atmosphere.geometry,
+        atmosphereShell.geometry,
         edgeShadow.geometry,
         stars?.geometry,
       ].forEach((geometry) => geometry?.dispose());
@@ -911,6 +971,7 @@ export async function createHeroEarth({
         shadow.material,
         innerAtmosphere.material,
         atmosphere.material,
+        atmosphereShell.material,
         edgeShadow.material,
         stars?.material,
       ].forEach((material) => material?.dispose());
