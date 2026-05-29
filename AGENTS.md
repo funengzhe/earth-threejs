@@ -2,7 +2,7 @@
 
 ## Scope
 
-This repository is a standalone open-source Three.js Earth renderer. Keep it independent from any product website or backend service.
+This repository is a standalone open-source Three.js Earth renderer. The README may mention that the project originated from a bigmodel.io page component, but the codebase itself must stay independent from any product website or backend service.
 
 ## Source Of Truth
 

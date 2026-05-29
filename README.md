@@ -2,7 +2,16 @@
 
 一个独立的 Three.js 地球渲染项目，目标是提供一个可直接嵌入产品首页的高质感地球视觉：高清地表、云层、暗面压黑、黑色轮廓、蓝色大气层、外围背景光、旋转动画和中文调参台。
 
-这个仓库只包含地球视觉实验和必要资源，不包含任何主站业务代码。
+这个项目起源于 [bigmodel.io](https://bigmodel.io/) 页面中的地球组件。为了让这个视觉组件可以独立调试、复用和开源，我把它从页面业务里抽离成了 `earth-threejs`。这个仓库只包含地球视觉实验和必要资源，不包含 bigmodel.io 的主站业务代码。
+
+![Earth Three.js preview](./docs/images/preview.jpg)
+
+## 在线预览
+
+- 展示页：[https://funengzhe.github.io/earth-threejs/](https://funengzhe.github.io/earth-threejs/)
+- 调参页：[https://funengzhe.github.io/earth-threejs/tuning.html](https://funengzhe.github.io/earth-threejs/tuning.html)
+
+GitHub Pages 通过 `.github/workflows/pages.yml` 自动部署。推送到 `main` 后，Actions 会把 `index.html`、`tuning.html`、`earth-three.js`、`assets/` 和 `vendor/` 发布到 Pages。
 
 ## 页面
 
