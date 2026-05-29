@@ -1,0 +1,10 @@
+{
+  "name": "cinematic-earth-threejs",
+  "version": "0.1.0",
+  "private": false,
+  "type": "module",
+  "scripts": {
+    "serve": "python3 -m http.server 4173",
+    "check": "node --check earth-three.js"
+  }
+}

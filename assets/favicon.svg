@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Cinematic Earth">
+  <defs>
+    <radialGradient id="earth" cx="36%" cy="28%" r="70%">
+      <stop offset="0%" stop-color="#f8fbff"/>
+      <stop offset="28%" stop-color="#8ec7ff"/>
+      <stop offset="58%" stop-color="#0d4fb8"/>
+      <stop offset="100%" stop-color="#020510"/>
+    </radialGradient>
+    <linearGradient id="rim" x1="12" x2="52" y1="12" y2="52">
+      <stop offset="0%" stop-color="#42c7ff"/>
+      <stop offset="48%" stop-color="#0047ff"/>
+      <stop offset="100%" stop-color="#000"/>
+    </linearGradient>
+  </defs>
+  <circle cx="32" cy="32" r="25" fill="url(#rim)"/>
+  <circle cx="32" cy="32" r="22" fill="url(#earth)"/>
+  <path fill="#ffffff" fill-opacity=".72" d="M18 24c6-5 16-7 29-3 2 1 3 3 2 5-8-3-17-3-26 1-4 2-7 1-5-3Zm4 15c8-3 16-3 24 0 2 1 2 4 0 5-8-2-16-1-23 2-4 1-5-5-1-7Z"/>
+  <circle cx="32" cy="32" r="28" fill="none" stroke="#07101f" stroke-width="3"/>
+</svg>
