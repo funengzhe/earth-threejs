@@ -13,6 +13,8 @@
 
 GitHub Pages 通过 `.github/workflows/pages.yml` 自动部署。推送到 `main` 后，Actions 会把 `index.html`、`tuning.html`、`earth-three.js`、`assets/` 和 `vendor/` 发布到 Pages。
 
+如果是首次开启 Pages，需要先在 GitHub 仓库里进入 `Settings -> Pages`，将 `Build and deployment` 的 `Source` 设为 `GitHub Actions`。开启后重新运行 `Deploy GitHub Pages` workflow，或再推送一次 `main`，展示页就会发布到上面的地址。
+
 ## 页面
 
 - `index.html`：干净展示页，只显示地球，适合截图、嵌入预览或作为最终 demo。
