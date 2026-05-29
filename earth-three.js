@@ -11,25 +11,74 @@ const TEXTURES = {
 
 const VIEW_LIGHT_DIRECTION = new THREE.Vector3(-0.9, 0.2, 0.38).normalize();
 export const EARTH_TUNING_PRESET = Object.freeze({
-  atmosphereColor: "#0033ff",
-  atmosphereShellSize: 1.018,
-  atmosphereShellStrength: 0,
-  blackRimStrength: 0.98,
+  atmosphereColor: "#2a45b2",
+  atmosphereShellSize: 1.004,
+  atmosphereShellStrength: 0.33,
+  backgroundHaloSize: 1,
+  backgroundHaloStrength: 0.1,
+  blackRimStrength: 0.35,
   cameraZ: 5.45,
-  cloudContrast: 0.88,
-  cloudOpacity: 0.86,
-  darkStrength: 0.1,
+  cloudContrast: 1,
+  cloudOpacity: 1,
+  darkStrength: 0.68,
   innerAtmosphereSize: 1,
-  innerAtmosphereStrength: 0.54,
-  lightIntensity: 0.78,
-  lightX: -0.53,
-  lightY: 0.23,
+  innerAtmosphereStrength: 0.34,
+  lightIntensity: 0.76,
+  lightX: -0.72,
+  lightY: 0.2,
   lightZ: 0.38,
   nightLightStrength: 0.012,
-  outerAtmosphereSize: 1.002,
-  outerAtmosphereStrength: 0.08,
+  outerAtmosphereSize: 1.007,
+  outerAtmosphereStrength: 0.06,
   rotationSpeed: 0.000036,
 });
+
+const QUALITY_PROFILES = Object.freeze({
+  low: {
+    desktopPixelRatio: 1.25,
+    desktopSamples: 0,
+    desktopSegments: [72, 48],
+    mobilePixelRatio: 1.1,
+    mobileSamples: 0,
+    mobileSegments: [48, 32],
+    textureAnisotropy: 4,
+    useAntialias: false,
+  },
+  balanced: {
+    desktopPixelRatio: 1.65,
+    desktopSamples: 2,
+    desktopSegments: [96, 64],
+    mobilePixelRatio: 1.25,
+    mobileSamples: 0,
+    mobileSegments: [56, 40],
+    textureAnisotropy: 8,
+    useAntialias: true,
+  },
+  high: {
+    desktopPixelRatio: 2,
+    desktopSamples: 4,
+    desktopSegments: [112, 72],
+    mobilePixelRatio: 1.45,
+    mobileSamples: 0,
+    mobileSegments: [72, 48],
+    textureAnisotropy: 16,
+    useAntialias: true,
+  },
+});
+
+function resolveQualityProfile({ anisotropyCap, isMobile, pixelRatioCap, quality = "balanced", samples } = {}) {
+  const baseProfile = QUALITY_PROFILES[quality] || QUALITY_PROFILES.balanced;
+  const [widthSegments, heightSegments] = isMobile ? baseProfile.mobileSegments : baseProfile.desktopSegments;
+
+  return {
+    heightSegments,
+    pixelRatioCap: pixelRatioCap ?? (isMobile ? baseProfile.mobilePixelRatio : baseProfile.desktopPixelRatio),
+    samples: samples ?? (isMobile ? baseProfile.mobileSamples : baseProfile.desktopSamples),
+    textureAnisotropy: anisotropyCap ?? baseProfile.textureAnisotropy,
+    useAntialias: baseProfile.useAntialias,
+    widthSegments,
+  };
+}
 
 function supportsWebGL() {
   try {
@@ -59,7 +108,7 @@ function setTextureDataSpace(texture) {
   }
 }
 
-function configureTexture(texture, renderer, { color = true, repeat = true } = {}) {
+function configureTexture(texture, renderer, { color = true, repeat = true, anisotropyCap = Infinity } = {}) {
   if (color) {
     setTextureColorSpace(texture);
   } else {
@@ -70,7 +119,7 @@ function configureTexture(texture, renderer, { color = true, repeat = true } = {
   texture.wrapT = THREE.ClampToEdgeWrapping;
   texture.magFilter = THREE.LinearFilter;
   texture.minFilter = THREE.LinearMipmapLinearFilter;
-  texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
+  texture.anisotropy = Math.max(1, Math.min(renderer.capabilities.getMaxAnisotropy(), anisotropyCap));
   texture.needsUpdate = true;
 }
 
@@ -103,6 +152,7 @@ function createStarField(isMobile) {
 function createEarthSurfaceMaterial({ dayMap, gradeMap, lightDirection, nightMap, normalMap, settings, specularMap }) {
   return new THREE.ShaderMaterial({
     uniforms: {
+      atmosphereColor: { value: new THREE.Color(settings.atmosphereColor) },
       blackRimStrength: { value: settings.blackRimStrength },
       dayMap: { value: dayMap },
       darkStrength: { value: settings.darkStrength },
@@ -130,6 +180,7 @@ function createEarthSurfaceMaterial({ dayMap, gradeMap, lightDirection, nightMap
       }
     `,
     fragmentShader: `
+      uniform vec3 atmosphereColor;
       uniform float blackRimStrength;
       uniform sampler2D dayMap;
       uniform float darkStrength;
@@ -201,13 +252,15 @@ function createEarthSurfaceMaterial({ dayMap, gradeMap, lightDirection, nightMap
         daylightColor += vec3(0.28, 0.5, 0.78) * oceanGlint * 0.12 * lightIntensity;
 
         float cityLight = max(max(texture2D(nightMap, vUv).r, texture2D(nightMap, vUv).g), texture2D(nightMap, vUv).b);
-        vec3 nightColor = base * mix(vec3(0.012, 0.016, 0.028), vec3(0.002, 0.004, 0.011), darkWeight) + vec3(0.0, 0.0008, 0.004);
+        vec3 nightColor = base * mix(vec3(0.12, 0.14, 0.19), vec3(0.045, 0.052, 0.072), darkWeight);
+        nightColor += atmosphereColor * mix(0.006, 0.002, darkWeight) + vec3(0.0, 0.0012, 0.004);
         nightColor += nightTint * pow(cityLight, 1.24) * smoothstep(0.12, -0.2, ndl) * nightLightStrength;
 
         vec3 color = mix(nightColor, daylightColor, terminator);
         color *= mix(1.0, mix(0.5, 0.34, edgeWeight), limb);
-        color += vec3(0.0, 0.025, 0.105) * pow(limb, 3.4) * smoothstep(-0.12, 0.78, ndl);
-        color += vec3(0.009, 0.044, 0.13) * pow(limb, 6.6) * softDay;
+        vec3 atmosphereTint = atmosphereColor * vec3(0.86, 0.98, 1.16);
+        color += atmosphereTint * 0.11 * pow(limb, 3.4) * smoothstep(-0.12, 0.78, ndl);
+        color += atmosphereTint * 0.14 * pow(limb, 6.6) * softDay;
         color = pow(color, vec3(1.02));
         float luminance = dot(color, vec3(0.2126, 0.7152, 0.0722));
         color = mix(vec3(luminance), color, 0.9);
@@ -358,9 +411,47 @@ function createTerminatorMaterial(lightDirection, settings) {
         float day = dot(normalize(vWorldNormal), normalize(lightDirection));
         float night = smoothstep(0.28, -0.08, day);
         float limb = pow(1.0 - max(dot(normalize(vViewNormal), vec3(0.0, 0.0, 1.0)), 0.0), 1.08);
-        float alpha = clamp(night * mix(0.16, 0.84, darkStrength) + limb * blackRimStrength * 0.072, 0.0, 0.84);
+        float darkWeight = clamp((darkStrength - 0.1) / 0.65, 0.0, 1.0);
+        float blackVeil = night * mix(0.24, 0.78, darkWeight);
+        float edgeVeil = limb * blackRimStrength * mix(0.034, 0.07, darkWeight);
+        float alpha = clamp(blackVeil + edgeVeil, 0.0, 0.84);
 
         gl_FragColor = vec4(0.0, 0.0, 0.0, alpha);
+      }
+    `,
+  });
+}
+
+function createBackgroundHaloMaterial(settings) {
+  return new THREE.ShaderMaterial({
+    blending: THREE.AdditiveBlending,
+    depthTest: false,
+    depthWrite: false,
+    side: THREE.BackSide,
+    transparent: true,
+    uniforms: {
+      backgroundHaloStrength: { value: settings.backgroundHaloStrength },
+    },
+    vertexShader: `
+      varying vec3 vViewNormal;
+
+      void main() {
+        vViewNormal = normalize(normalMatrix * normal);
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }
+    `,
+    fragmentShader: `
+      uniform float backgroundHaloStrength;
+      varying vec3 vViewNormal;
+
+      void main() {
+        float viewRim = 1.0 - abs(dot(normalize(vViewNormal), vec3(0.0, 0.0, 1.0)));
+        float broadHalo = smoothstep(0.42, 1.0, viewRim) * 0.18;
+        float fineHalo = smoothstep(0.72, 1.0, viewRim) * 0.28;
+        float outerLine = smoothstep(0.9, 1.0, viewRim) * 0.22;
+        float alpha = (broadHalo + fineHalo + outerLine) * backgroundHaloStrength;
+
+        gl_FragColor = vec4(vec3(0.86, 0.91, 1.0), clamp(alpha, 0.0, 0.18));
       }
     `,
   });
@@ -469,7 +560,7 @@ function createAtmosphereMaterial(lightDirection, settings) {
         float hardRim = smoothstep(0.82, 1.0, viewRim);
         float day = smoothstep(-0.18, 0.66, dot(worldNormal, normalize(lightDirection)));
         vec3 color = mix(atmosphereColor * 0.18, atmosphereColor, day);
-        float alpha = (rim * mix(0.006, 0.09, day) + hardRim * day * 0.2) * outerAtmosphereStrength * 1.55;
+        float alpha = (rim * mix(0.004, 0.09, day) + hardRim * mix(0.012, 0.2, day)) * outerAtmosphereStrength * 1.55;
         gl_FragColor = vec4(color, clamp(alpha, 0.0, 0.24));
         #include <colorspace_fragment>
       }
@@ -560,7 +651,8 @@ function createAtmosphereShellMaterial(lightDirection, settings) {
         float innerWash = pow(viewRim, 3.8) * 0.46;
         float horizonBand = smoothstep(0.54, 0.94, viewRim) * 0.42;
         float alpha = (broadGlass + innerWash + horizonBand) * day * nightFade * atmosphereShellStrength;
-        vec3 color = mix(atmosphereColor * 0.56, vec3(0.24, 0.72, 1.0), day);
+        vec3 shellHighlight = mix(atmosphereColor * 1.36, vec3(0.9), 0.12);
+        vec3 color = mix(atmosphereColor * 0.56, shellHighlight, day);
 
         gl_FragColor = vec4(color, clamp(alpha, 0.0, 0.24));
         #include <colorspace_fragment>
@@ -569,7 +661,7 @@ function createAtmosphereShellMaterial(lightDirection, settings) {
   });
 }
 
-function createCompositePass(renderer, isMobile) {
+function createCompositePass(renderer, samples) {
   const target = new THREE.WebGLRenderTarget(1, 1, {
     depthBuffer: true,
     format: THREE.RGBAFormat,
@@ -578,7 +670,7 @@ function createCompositePass(renderer, isMobile) {
     stencilBuffer: false,
   });
   if ("samples" in target) {
-    target.samples = isMobile ? 0 : 4;
+    target.samples = samples;
   }
 
   const scene = new THREE.Scene();
@@ -624,6 +716,8 @@ function createCompositePass(renderer, isMobile) {
         float neighborAlpha = max(max(left.a, right.a), max(up.a, down.a));
         float alpha = max(center.a, neighborAlpha * 0.012);
         vec3 edgeInk = mix(color, vec3(0.0), smoothstep(0.015, 0.28, neighborAlpha - center.a) * 0.3);
+        float dither = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453) - 0.5;
+        edgeInk += dither * 0.0026 * smoothstep(0.02, 0.95, alpha);
 
         gl_FragColor = vec4(edgeInk, alpha);
         #include <colorspace_fragment>
@@ -655,50 +749,18 @@ function createCompositePass(renderer, isMobile) {
   };
 }
 
-function createNightLightsMaterial(texture) {
-  return new THREE.ShaderMaterial({
-    blending: THREE.AdditiveBlending,
-    depthWrite: false,
-    transparent: true,
-    uniforms: {
-      lightDirection: { value: VIEW_LIGHT_DIRECTION },
-      nightMap: { value: texture },
-      opacity: { value: 0.04 },
-    },
-    vertexShader: `
-      varying vec2 vUv;
-      varying vec3 vViewNormal;
-
-      void main() {
-        vUv = uv;
-        vViewNormal = normalize(normalMatrix * normal);
-        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-      }
-    `,
-    fragmentShader: `
-      uniform vec3 lightDirection;
-      uniform sampler2D nightMap;
-      uniform float opacity;
-      varying vec2 vUv;
-      varying vec3 vViewNormal;
-
-      void main() {
-        vec3 lights = texture2D(nightMap, vUv).rgb;
-        float day = max(dot(normalize(vViewNormal), normalize(lightDirection)), 0.0);
-        float night = smoothstep(0.46, -0.04, day);
-        float strength = max(max(lights.r, lights.g), lights.b) * night * opacity;
-        gl_FragColor = vec4(lights * vec3(1.35, 0.92, 0.58), strength);
-      }
-    `,
-  });
-}
-
 export async function createHeroEarth({
   globe,
   canvas,
+  anisotropyCap,
   reducedMotion = false,
   showStars = true,
   initialRotationY = -0.12,
+  pauseWhenHidden = true,
+  pauseWhenOutsideViewport = true,
+  pixelRatioCap,
+  quality = "balanced",
+  samples,
   settings = {},
   tiltX = 0.16,
   tiltY = -0.18,
@@ -711,14 +773,21 @@ export async function createHeroEarth({
   let currentRotationSpeed = tuning.rotationSpeed;
   const lightDirection = new THREE.Vector3(tuning.lightX, tuning.lightY, tuning.lightZ).normalize();
   const isMobile = window.matchMedia("(max-width: 680px)").matches;
+  const qualityProfile = resolveQualityProfile({
+    anisotropyCap,
+    isMobile,
+    pixelRatioCap,
+    quality,
+    samples,
+  });
   const renderer = new THREE.WebGLRenderer({
     alpha: true,
-    antialias: !isMobile,
+    antialias: qualityProfile.useAntialias && !isMobile,
     canvas,
     powerPreference: isMobile ? "default" : "high-performance",
   });
   renderer.setClearColor(0x000000, 0);
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, isMobile ? 1.45 : 2));
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, qualityProfile.pixelRatioCap));
 
   if ("outputColorSpace" in renderer) {
     renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -732,7 +801,7 @@ export async function createHeroEarth({
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(25.5, 1, 0.1, 100);
   camera.position.set(0, 0, tuning.cameraZ);
-  const compositePass = createCompositePass(renderer, isMobile);
+  const compositePass = createCompositePass(renderer, qualityProfile.samples);
 
   const system = new THREE.Group();
   system.rotation.set(tiltX, tiltY, tiltZ);
@@ -748,16 +817,28 @@ export async function createHeroEarth({
     loader.loadAsync(TEXTURES.specular),
   ]);
 
-  configureTexture(earthMap, renderer);
-  configureTexture(earthGradeMap, renderer);
-  configureTexture(lightsMap, renderer);
-  configureTexture(cloudMap, renderer, { color: false });
-  configureTexture(normalMap, renderer, { color: false });
-  configureTexture(specularMap, renderer, { color: false });
+  configureTexture(earthMap, renderer, { anisotropyCap: qualityProfile.textureAnisotropy });
+  configureTexture(earthGradeMap, renderer, { anisotropyCap: qualityProfile.textureAnisotropy });
+  configureTexture(lightsMap, renderer, { anisotropyCap: qualityProfile.textureAnisotropy });
+  configureTexture(cloudMap, renderer, { anisotropyCap: qualityProfile.textureAnisotropy, color: false });
+  configureTexture(normalMap, renderer, { anisotropyCap: qualityProfile.textureAnisotropy, color: false });
+  configureTexture(specularMap, renderer, { anisotropyCap: qualityProfile.textureAnisotropy, color: false });
 
-  const earthGeometry = new THREE.SphereGeometry(1, isMobile ? 72 : 112, isMobile ? 48 : 72);
+  function createSphereGeometry(radius) {
+    return new THREE.SphereGeometry(radius, qualityProfile.widthSegments, qualityProfile.heightSegments);
+  }
+
+  const earthGeometry = createSphereGeometry(1);
+  const backgroundHalo = new THREE.Mesh(
+    createSphereGeometry(1.075),
+    createBackgroundHaloMaterial(tuning),
+  );
+  backgroundHalo.rotation.y = initialRotationY;
+  backgroundHalo.renderOrder = -1;
+  system.add(backgroundHalo);
+
   const silhouette = new THREE.Mesh(
-    new THREE.SphereGeometry(1.031, isMobile ? 72 : 112, isMobile ? 48 : 72),
+    createSphereGeometry(1.031),
     createSilhouetteMaterial(tuning),
   );
   silhouette.rotation.y = initialRotationY;
@@ -778,7 +859,7 @@ export async function createHeroEarth({
   earth.renderOrder = 1;
   system.add(earth);
 
-  const cloudGeometry = new THREE.SphereGeometry(1.012, isMobile ? 72 : 112, isMobile ? 48 : 72);
+  const cloudGeometry = createSphereGeometry(1.012);
   const clouds = new THREE.Mesh(
     cloudGeometry,
     createCloudMaterial(cloudMap, lightDirection, tuning),
@@ -803,53 +884,71 @@ export async function createHeroEarth({
   system.add(shadow);
 
   const innerAtmosphere = new THREE.Mesh(
-    new THREE.SphereGeometry(1.016, isMobile ? 72 : 112, isMobile ? 48 : 72),
+    createSphereGeometry(1.016),
     createInnerAtmosphereMaterial(lightDirection, tuning),
   );
   innerAtmosphere.renderOrder = 4;
   system.add(innerAtmosphere);
 
   const atmosphere = new THREE.Mesh(
-    new THREE.SphereGeometry(1.046, isMobile ? 72 : 112, isMobile ? 48 : 72),
+    createSphereGeometry(1.046),
     createAtmosphereMaterial(lightDirection, tuning),
   );
-  atmosphere.renderOrder = 5;
+  atmosphere.renderOrder = 6;
   system.add(atmosphere);
 
   const atmosphereShell = new THREE.Mesh(
-    new THREE.SphereGeometry(1.018, isMobile ? 72 : 112, isMobile ? 48 : 72),
+    createSphereGeometry(1.018),
     createAtmosphereShellMaterial(lightDirection, tuning),
   );
-  atmosphereShell.renderOrder = 6;
+  atmosphereShell.renderOrder = 7;
   system.add(atmosphereShell);
 
   const edgeShadow = new THREE.Mesh(
-    new THREE.SphereGeometry(1.017, isMobile ? 72 : 112, isMobile ? 48 : 72),
+    createSphereGeometry(1.017),
     createEdgeShadowMaterial(tuning),
   );
-  edgeShadow.renderOrder = 7;
+  edgeShadow.renderOrder = 5;
   system.add(edgeShadow);
 
   const stars = showStars ? createStarField(isMobile) : null;
   if (stars) scene.add(stars);
 
-  let visible = true;
+  let manualVisible = true;
+  let documentVisible = pauseWhenHidden ? !document.hidden : true;
+  let viewportVisible = true;
   let animationFrame = 0;
   let disposed = false;
   let lastTime = 0;
+  let renderSize = 0;
+  let renderPixelRatio = 0;
+
+  function canRender() {
+    return manualVisible && documentVisible && viewportVisible;
+  }
+
+  function shouldAnimate() {
+    return canRender() && !reducedMotion && currentRotationSpeed > 0;
+  }
 
   function resize() {
     const rect = globe.getBoundingClientRect();
     const size = Math.max(260, Math.floor(rect.width || globe.clientWidth || 620));
-    renderer.setSize(size, size, false);
     const pixelRatio = renderer.getPixelRatio();
-    compositePass.resize(Math.max(1, Math.floor(size * pixelRatio)), Math.max(1, Math.floor(size * pixelRatio)));
+    if (size !== renderSize || pixelRatio !== renderPixelRatio) {
+      renderSize = size;
+      renderPixelRatio = pixelRatio;
+      renderer.setSize(size, size, false);
+      const targetSize = Math.max(1, Math.floor(size * pixelRatio));
+      compositePass.resize(targetSize, targetSize);
+    }
     camera.aspect = 1;
     camera.updateProjectionMatrix();
     render();
   }
 
   function render() {
+    if (disposed || !canRender()) return;
     compositePass.render(scene, camera);
   }
 
@@ -868,6 +967,7 @@ export async function createHeroEarth({
     camera.updateProjectionMatrix();
 
     earthMaterial.uniforms.blackRimStrength.value = tuning.blackRimStrength;
+    earthMaterial.uniforms.atmosphereColor.value.set(tuning.atmosphereColor);
     earthMaterial.uniforms.darkStrength.value = tuning.darkStrength;
     earthMaterial.uniforms.lightIntensity.value = tuning.lightIntensity;
     earthMaterial.uniforms.nightLightStrength.value = tuning.nightLightStrength;
@@ -885,39 +985,45 @@ export async function createHeroEarth({
     atmosphere.material.uniforms.outerAtmosphereStrength.value = tuning.outerAtmosphereStrength;
     atmosphereShell.material.uniforms.atmosphereColor.value.set(tuning.atmosphereColor);
     atmosphereShell.material.uniforms.atmosphereShellStrength.value = tuning.atmosphereShellStrength;
+    backgroundHalo.material.uniforms.backgroundHaloStrength.value = tuning.backgroundHaloStrength;
     edgeShadow.material.uniforms.blackRimStrength.value = tuning.blackRimStrength;
 
+    backgroundHalo.scale.setScalar(Math.max(tuning.backgroundHaloSize, 1));
     innerAtmosphere.scale.setScalar(Math.max(tuning.innerAtmosphereSize, 1));
     atmosphere.scale.setScalar(Math.max(tuning.outerAtmosphereSize, 1));
     atmosphereShell.scale.setScalar(Math.max(tuning.atmosphereShellSize, 1));
     render();
+    if (shouldAnimate()) {
+      start();
+    } else {
+      stop();
+    }
   }
 
   function animate(time = 0) {
     animationFrame = 0;
-    if (disposed || !visible) return;
+    if (disposed || !canRender()) return;
 
     const delta = lastTime ? Math.min(time - lastTime, 64) : 16;
     lastTime = time;
 
-    if (!reducedMotion) {
-      const earthStep = delta * currentRotationSpeed;
-      earth.rotation.y += earthStep;
-      shadow.rotation.y = earth.rotation.y;
-      clouds.rotation.y += delta * currentRotationSpeed * 1.18;
-      cloudShadow.rotation.y = clouds.rotation.y - 0.012;
-      if (stars) stars.rotation.z += delta * 0.000008;
-    }
+    const earthStep = delta * currentRotationSpeed;
+    earth.rotation.y += earthStep;
+    shadow.rotation.y = earth.rotation.y;
+    clouds.rotation.y += delta * currentRotationSpeed * 1.18;
+    cloudShadow.rotation.y = clouds.rotation.y - 0.012;
+    if (stars) stars.rotation.z += delta * 0.000008;
 
     render();
 
-    if (!reducedMotion) {
+    if (shouldAnimate()) {
       animationFrame = requestAnimationFrame(animate);
     }
   }
 
   function start() {
-    if (disposed || animationFrame || reducedMotion || !visible) return;
+    if (disposed || animationFrame || !shouldAnimate()) return;
+    lastTime = 0;
     animationFrame = requestAnimationFrame(animate);
   }
 
@@ -925,6 +1031,39 @@ export async function createHeroEarth({
     if (!animationFrame) return;
     cancelAnimationFrame(animationFrame);
     animationFrame = 0;
+  }
+
+  function refreshRuntimeVisibility() {
+    if (canRender()) {
+      render();
+      start();
+    } else {
+      stop();
+    }
+  }
+
+  function handleDocumentVisibility() {
+    documentVisible = !document.hidden;
+    refreshRuntimeVisibility();
+  }
+
+  const resizeObserver = "ResizeObserver" in window ? new ResizeObserver(() => resize()) : null;
+  resizeObserver?.observe(globe);
+
+  const intersectionObserver =
+    pauseWhenOutsideViewport && "IntersectionObserver" in window
+      ? new IntersectionObserver(
+          ([entry]) => {
+            viewportVisible = Boolean(entry?.isIntersecting);
+            refreshRuntimeVisibility();
+          },
+          { threshold: 0.01 },
+        )
+      : null;
+  intersectionObserver?.observe(globe);
+
+  if (pauseWhenHidden) {
+    document.addEventListener("visibilitychange", handleDocumentVisibility);
   }
 
   syncTuning();
@@ -941,20 +1080,21 @@ export async function createHeroEarth({
       syncTuning(nextSettings);
     },
     setVisible(nextVisible) {
-      visible = Boolean(nextVisible);
-      if (visible) {
-        start();
-        render();
-      } else {
-        stop();
-      }
+      manualVisible = Boolean(nextVisible);
+      refreshRuntimeVisibility();
     },
     dispose() {
       disposed = true;
       stop();
+      resizeObserver?.disconnect();
+      intersectionObserver?.disconnect();
+      if (pauseWhenHidden) {
+        document.removeEventListener("visibilitychange", handleDocumentVisibility);
+      }
       renderer.dispose();
       [
         earthGeometry,
+        backgroundHalo.geometry,
         silhouette.geometry,
         cloudGeometry,
         innerAtmosphere.geometry,
@@ -965,6 +1105,7 @@ export async function createHeroEarth({
       ].forEach((geometry) => geometry?.dispose());
       [
         earthMaterial,
+        backgroundHalo.material,
         silhouette.material,
         cloudShadow.material,
         clouds.material,

@@ -1,0 +1,478 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Three.js 地球调参台</title>
+    <meta
+      name="description"
+      content="A standalone Three.js Earth renderer tuning page with live controls for atmosphere, shadow, clouds, light, and motion."
+    />
+    <link rel="icon" href="./assets/favicon.svg" type="image/svg+xml" />
+    <link rel="modulepreload" href="./earth-three.js" />
+    <link rel="modulepreload" href="./vendor/three.module.js" />
+    <link rel="preload" as="image" href="./assets/earth/earth_day_4k.jpg" crossorigin="anonymous" />
+    <link rel="preload" as="image" href="./assets/earth/earth_atmos_2048.jpg" crossorigin="anonymous" />
+    <link rel="preload" as="image" href="./assets/earth/earth_webgl_clouds_2048.png" crossorigin="anonymous" />
+    <link rel="preload" as="image" href="./assets/earth/earth_lights_2048.png" crossorigin="anonymous" />
+    <link rel="preload" as="image" href="./assets/earth/react-earth-lite/earth-normal.webp" crossorigin="anonymous" />
+    <link rel="preload" as="image" href="./assets/earth/react-earth-lite/earth-specular.webp" crossorigin="anonymous" />
+    <style>
+      :root {
+        color-scheme: dark;
+        background: #020202;
+        font-family:
+          ui-sans-serif,
+          system-ui,
+          -apple-system,
+          BlinkMacSystemFont,
+          "Segoe UI",
+          sans-serif;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        width: 100%;
+        min-width: 320px;
+        height: 100%;
+        margin: 0;
+        overflow: hidden;
+        background:
+          radial-gradient(circle at 50% 50%, rgba(24, 88, 150, 0.14), transparent 44%),
+          #020202;
+      }
+
+      body[data-bg="light"] {
+        background:
+          radial-gradient(circle at 50% 50%, rgba(31, 91, 146, 0.06), transparent 45%),
+          #fff;
+      }
+
+      body {
+        display: grid;
+        place-items: center;
+      }
+
+      .stage {
+        display: grid;
+        width: 100vw;
+        height: 100svh;
+        place-items: center;
+      }
+
+      .orb {
+        position: relative;
+        width: min(99vw, 99svh);
+        height: min(99vw, 99svh);
+      }
+
+      .orb canvas {
+        display: block;
+        width: 100%;
+        height: 100%;
+      }
+
+      .orb::after {
+        position: absolute;
+        inset: 4.8%;
+        border-radius: 50%;
+        background: radial-gradient(circle at 30% 26%, rgba(255, 255, 255, 0.018), transparent 25%);
+        content: "";
+        mix-blend-mode: screen;
+        pointer-events: none;
+      }
+
+      .panel {
+        position: fixed;
+        top: 18px;
+        right: 18px;
+        z-index: 5;
+        width: min(380px, calc(100vw - 28px));
+        max-height: calc(100svh - 36px);
+        overflow: auto;
+        border: 1px solid rgba(8, 19, 35, 0.14);
+        border-radius: 22px;
+        background: rgba(250, 252, 255, 0.82);
+        box-shadow: 0 24px 70px rgba(5, 14, 28, 0.18);
+        color: #0d1726;
+        font-size: 13px;
+        line-height: 1.45;
+        backdrop-filter: blur(18px);
+      }
+
+      .panel summary {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 14px 16px;
+        cursor: pointer;
+        font-weight: 700;
+        letter-spacing: 0.02em;
+        list-style: none;
+      }
+
+      .panel summary::-webkit-details-marker {
+        display: none;
+      }
+
+      .panel summary::after {
+        color: rgba(13, 23, 38, 0.52);
+        content: "收起";
+        font-size: 12px;
+        font-weight: 600;
+      }
+
+      .panel:not([open]) summary::after {
+        content: "展开";
+      }
+
+      .panel__body {
+        display: grid;
+        gap: 12px;
+        padding: 0 14px 14px;
+      }
+
+      .panel__group {
+        display: grid;
+        gap: 8px;
+        margin: 0;
+        padding: 12px;
+        border: 1px solid rgba(10, 24, 44, 0.08);
+        border-radius: 16px;
+        background: rgba(255, 255, 255, 0.58);
+      }
+
+      .panel__group legend {
+        padding: 0 4px;
+        color: rgba(13, 23, 38, 0.62);
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      .control {
+        display: grid;
+        gap: 5px;
+      }
+
+      .control__row {
+        display: flex;
+        justify-content: space-between;
+        gap: 10px;
+      }
+
+      .control__value {
+        color: rgba(13, 23, 38, 0.54);
+        font-variant-numeric: tabular-nums;
+      }
+
+      .control input {
+        width: 100%;
+        accent-color: #1287ff;
+      }
+
+      .control input[type="color"] {
+        height: 34px;
+        border: 1px solid rgba(13, 23, 38, 0.12);
+        border-radius: 999px;
+        background: transparent;
+        cursor: pointer;
+      }
+
+      .panel__actions {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+      }
+
+      .panel__actions button {
+        border: 1px solid rgba(13, 23, 38, 0.1);
+        border-radius: 999px;
+        background: rgba(13, 23, 38, 0.88);
+        color: #fff;
+        cursor: pointer;
+        font: inherit;
+        font-weight: 700;
+        padding: 9px 10px;
+      }
+
+      .panel__actions button:nth-child(2n) {
+        background: rgba(255, 255, 255, 0.72);
+        color: #0d1726;
+      }
+
+      .fallback {
+        position: fixed;
+        left: 50%;
+        top: 50%;
+        display: none;
+        width: min(320px, calc(100vw - 48px));
+        transform: translate(-50%, -50%);
+        color: rgba(255, 255, 255, 0.72);
+        line-height: 1.7;
+        text-align: center;
+      }
+
+      body[data-bg="light"] .fallback {
+        color: rgba(13, 23, 38, 0.68);
+      }
+
+      @media (max-width: 720px) {
+        .panel {
+          top: auto;
+          right: 12px;
+          bottom: 12px;
+          left: 12px;
+          width: auto;
+          max-height: 48svh;
+          border-radius: 18px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="stage" aria-label="Earth tuning preview">
+      <div class="orb" data-earth-globe>
+        <canvas data-earth-canvas></canvas>
+      </div>
+    </main>
+
+    <details class="panel" data-controls open>
+      <summary>地球调参台</summary>
+      <div class="panel__body" data-controls-body></div>
+    </details>
+
+    <p class="fallback" data-fallback>当前浏览器不支持 WebGL，无法显示 Three.js 地球。</p>
+
+    <script type="module">
+      import { createHeroEarth, EARTH_TUNING_PRESET } from "./earth-three.js";
+
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("bg") === "light") {
+        document.body.dataset.bg = "light";
+      }
+
+      const globe = document.querySelector("[data-earth-globe]");
+      const canvas = document.querySelector("[data-earth-canvas]");
+      const reducedMotion =
+        params.get("freeze") === "1" ||
+        window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+      const tuningKeys = Object.keys(EARTH_TUNING_PRESET);
+      const tuning = tuningKeys.reduce((nextTuning, key) => {
+        const rawValue = params.get(key);
+        if (rawValue === null) {
+          nextTuning[key] = EARTH_TUNING_PRESET[key];
+          return nextTuning;
+        }
+
+        if (typeof EARTH_TUNING_PRESET[key] === "number") {
+          const value = Number(rawValue);
+          nextTuning[key] = Number.isFinite(value) ? value : EARTH_TUNING_PRESET[key];
+        } else {
+          nextTuning[key] = rawValue || EARTH_TUNING_PRESET[key];
+        }
+
+        return nextTuning;
+      }, {});
+
+      const controller = await createHeroEarth({
+        globe,
+        canvas,
+        reducedMotion,
+        showStars: false,
+        initialRotationY: Number(params.get("ry") || "-0.12"),
+        quality: params.get("quality") || "high",
+        settings: tuning,
+        tiltX: Number(params.get("tx") || "0.16"),
+        tiltY: Number(params.get("ty") || "-0.18"),
+        tiltZ: Number(params.get("tz") || "0"),
+        rotationSpeed: tuning.rotationSpeed,
+      });
+
+      if (!controller) {
+        document.querySelector("[data-fallback]").style.display = "block";
+      }
+
+      window.addEventListener("resize", () => controller?.resize());
+
+      const controlGroups = [
+        {
+          title: "构图",
+          controls: [{ key: "cameraZ", label: "画面大小", min: 4.25, max: 5.45, step: 0.01, precision: 2 }],
+        },
+        {
+          title: "光照",
+          controls: [
+            { key: "lightX", label: "光照 X", min: -1.2, max: -0.2, step: 0.01, precision: 2 },
+            { key: "lightY", label: "光照 Y", min: -0.2, max: 0.5, step: 0.01, precision: 2 },
+            { key: "lightZ", label: "光照 Z", min: 0.05, max: 0.8, step: 0.01, precision: 2 },
+            { key: "lightIntensity", label: "光照亮度", min: 0.55, max: 1.75, step: 0.01, precision: 2 },
+          ],
+        },
+        {
+          title: "云层",
+          controls: [
+            { key: "cloudOpacity", label: "云层厚度", min: 0.2, max: 1, step: 0.01, precision: 2 },
+            { key: "cloudContrast", label: "云层层次", min: 0, max: 1, step: 0.01, precision: 2 },
+          ],
+        },
+        {
+          title: "大气层",
+          controls: [
+            { key: "atmosphereColor", label: "光晕颜色", type: "color" },
+            { key: "atmosphereShellStrength", label: "蓝色透明罩", min: 0, max: 1, step: 0.01, precision: 2 },
+            { key: "atmosphereShellSize", label: "透明罩大小", min: 1, max: 1.06, step: 0.001, precision: 3 },
+            { key: "innerAtmosphereStrength", label: "内光晕强度", min: 0, max: 0.7, step: 0.01, precision: 2 },
+            { key: "innerAtmosphereSize", label: "内光晕大小", min: 1, max: 1.05, step: 0.001, precision: 3 },
+            { key: "outerAtmosphereStrength", label: "外光晕强度", min: 0, max: 0.55, step: 0.01, precision: 2 },
+            { key: "outerAtmosphereSize", label: "外光晕大小", min: 1, max: 1.075, step: 0.001, precision: 3 },
+          ],
+        },
+        {
+          title: "暗部",
+          controls: [
+            { key: "darkStrength", label: "暗面黑色遮罩", min: 0.1, max: 0.75, step: 0.01, precision: 2 },
+            { key: "blackRimStrength", label: "黑色轮廓", min: 0.35, max: 1, step: 0.01, precision: 2 },
+            { key: "backgroundHaloStrength", label: "外围白光", min: 0, max: 0.7, step: 0.01, precision: 2 },
+            { key: "backgroundHaloSize", label: "白光范围", min: 1, max: 1.14, step: 0.001, precision: 3 },
+          ],
+        },
+        {
+          title: "动画",
+          controls: [
+            { key: "rotationSpeed", label: "旋转速度", min: 0, max: 0.00028, step: 0.000002, precision: 6 },
+          ],
+        },
+      ];
+
+      function formatValue(value, precision) {
+        if (typeof value === "string") return value;
+        return Number(value).toFixed(precision);
+      }
+
+      function buildShareUrl(currentTuning, path = window.location.pathname) {
+        const url = new URL(window.location.href);
+        url.pathname = path;
+        tuningKeys.forEach((key) => url.searchParams.delete(key));
+        Object.entries(currentTuning).forEach(([key, value]) => {
+          url.searchParams.set(key, typeof value === "number" ? Number(value).toFixed(key === "rotationSpeed" ? 6 : 3) : value);
+        });
+        return url.toString();
+      }
+
+      function mountControls() {
+        if (!controller) return;
+
+        const body = document.querySelector("[data-controls-body]");
+        const currentTuning = { ...controller.getTuning() };
+        const inputs = new Map();
+
+        controlGroups.forEach((group) => {
+          const fieldset = document.createElement("fieldset");
+          fieldset.className = "panel__group";
+          const legend = document.createElement("legend");
+          legend.textContent = group.title;
+          fieldset.append(legend);
+
+          group.controls.forEach((control) => {
+            const label = document.createElement("label");
+            label.className = "control";
+
+            const row = document.createElement("span");
+            row.className = "control__row";
+
+            const name = document.createElement("span");
+            name.textContent = control.label;
+
+            const value = document.createElement("span");
+            value.className = "control__value";
+            value.textContent = formatValue(currentTuning[control.key], control.precision);
+
+            const input = document.createElement("input");
+            input.type = control.type || "range";
+            if (input.type === "range") {
+              input.min = control.min;
+              input.max = control.max;
+              input.step = control.step;
+            }
+            input.value = currentTuning[control.key];
+
+            input.addEventListener("input", () => {
+              const nextValue = input.type === "color" ? input.value : Number(input.value);
+              currentTuning[control.key] = nextValue;
+              value.textContent = formatValue(nextValue, control.precision);
+              controller.setTuning({ [control.key]: nextValue });
+            });
+
+            inputs.set(control.key, { control, input, value });
+            row.append(name, value);
+            label.append(row, input);
+            fieldset.append(label);
+          });
+
+          body.append(fieldset);
+        });
+
+        const actions = document.createElement("div");
+        actions.className = "panel__actions";
+
+        function applyTuningPreset(preset) {
+          Object.assign(currentTuning, preset);
+          controller.setTuning(currentTuning);
+          inputs.forEach(({ control, input, value }, key) => {
+            input.value = currentTuning[key];
+            value.textContent = formatValue(currentTuning[key], control.precision);
+          });
+        }
+
+        const copyButton = document.createElement("button");
+        copyButton.type = "button";
+        copyButton.textContent = "复制参数链接";
+        copyButton.addEventListener("click", async () => {
+          await navigator.clipboard?.writeText(buildShareUrl(currentTuning));
+          copyButton.textContent = "已复制";
+          window.setTimeout(() => {
+            copyButton.textContent = "复制参数链接";
+          }, 1200);
+        });
+
+        const cleanButton = document.createElement("button");
+        cleanButton.type = "button";
+        cleanButton.textContent = "打开纯展示页";
+        cleanButton.addEventListener("click", () => {
+          const cleanPath = new URL("./", window.location.href).pathname;
+          window.open(buildShareUrl(currentTuning, cleanPath), "_blank", "noopener,noreferrer");
+        });
+
+        const lightButton = document.createElement("button");
+        lightButton.type = "button";
+        lightButton.textContent = "切换浅色背景";
+        lightButton.addEventListener("click", () => {
+          const isLight = document.body.dataset.bg === "light";
+          document.body.dataset.bg = isLight ? "" : "light";
+          const url = new URL(window.location.href);
+          if (isLight) {
+            url.searchParams.delete("bg");
+          } else {
+            url.searchParams.set("bg", "light");
+          }
+          window.history.replaceState(null, "", url);
+        });
+
+        const resetButton = document.createElement("button");
+        resetButton.type = "button";
+        resetButton.textContent = "恢复默认";
+        resetButton.addEventListener("click", () => applyTuningPreset(EARTH_TUNING_PRESET));
+
+        actions.append(copyButton, cleanButton, lightButton, resetButton);
+        body.append(actions);
+      }
+
+      mountControls();
+    </script>
+  </body>
+</html>
