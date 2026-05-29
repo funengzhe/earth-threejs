@@ -16,7 +16,32 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  detect-pages:
+    runs-on: ubuntu-latest
+    outputs:
+      enabled: ${{ steps.pages.outputs.enabled }}
+    steps:
+      - name: Check Pages enablement
+        id: pages
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          status="$(curl -s -o /dev/null -w "%{http_code}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            "https://api.github.com/repos/${REPOSITORY}/pages")"
+
+          if [ "${status}" = "200" ]; then
+            echo "enabled=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "enabled=false" >> "${GITHUB_OUTPUT}"
+            echo "::notice::GitHub Pages is not enabled yet. Open Settings -> Pages, set Source to GitHub Actions, then rerun this workflow."
+          fi
+
   deploy:
+    needs: detect-pages
+    if: needs.detect-pages.outputs.enabled == 'true'
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
