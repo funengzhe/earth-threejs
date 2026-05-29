@@ -11,9 +11,13 @@
 - 展示页：[https://funengzhe.github.io/earth-threejs/](https://funengzhe.github.io/earth-threejs/)
 - 调参页：[https://funengzhe.github.io/earth-threejs/tuning.html](https://funengzhe.github.io/earth-threejs/tuning.html)
 
-GitHub Pages 通过 `.github/workflows/pages.yml` 自动部署。推送到 `main` 后，Actions 会把 `index.html`、`tuning.html`、`earth-three.js`、`assets/` 和 `vendor/` 发布到 Pages。
+GitHub Pages 当前通过 `gh-pages` 分支发布。更新展示页后，可以把 `main` 同步到 `gh-pages`：
 
-如果是首次开启 Pages，需要先在 GitHub 仓库里进入 `Settings -> Pages`，将 `Build and deployment` 的 `Source` 设为 `GitHub Actions`。开启后重新运行 `Deploy GitHub Pages` workflow，或再推送一次 `main`，展示页就会发布到上面的地址。
+```bash
+git push origin main:gh-pages
+```
+
+仓库也保留了 `.github/workflows/pages.yml`。如果后续想改成 GitHub Actions 自动部署，可以在 GitHub 仓库里进入 `Settings -> Pages`，将 `Build and deployment` 的 `Source` 设为 `GitHub Actions`，然后重新运行 `Deploy GitHub Pages` workflow。
 
 ## 页面
 
