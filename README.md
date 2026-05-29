@@ -1,6 +1,6 @@
-# Cinematic Earth Three.js
+# Earth Three.js
 
-A standalone Three.js Earth renderer focused on a cinematic, presentation-ready look: layered surface color grading, cloud shell, cloud shadows, night-side compression, black rim, blue atmosphere, rotation, and live tuning controls.
+A standalone Three.js Earth renderer focused on a presentation-ready look: layered surface color grading, cloud shell, cloud shadows, night-side compression, black rim, blue atmosphere, rotation, and live tuning controls.
 
 This repository is intentionally independent from any product website. It only contains the Earth visual experiment and the minimal assets needed to run it locally.
 

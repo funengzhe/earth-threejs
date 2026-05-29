@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Cinematic Earth">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Earth Three.js">
   <defs>
     <radialGradient id="earth" cx="36%" cy="28%" r="70%">
       <stop offset="0%" stop-color="#f8fbff"/>
