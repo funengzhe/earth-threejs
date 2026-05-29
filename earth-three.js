@@ -12,20 +12,20 @@ const TEXTURES = {
 const VIEW_LIGHT_DIRECTION = new THREE.Vector3(-0.9, 0.2, 0.38).normalize();
 export const EARTH_TUNING_PRESET = Object.freeze({
   atmosphereColor: "#0033ff",
-  blackRimStrength: 0.95,
+  blackRimStrength: 0.98,
   cameraZ: 5.45,
-  cloudContrast: 0.83,
-  cloudOpacity: 1,
+  cloudContrast: 0.88,
+  cloudOpacity: 0.86,
   darkStrength: 0.1,
   innerAtmosphereSize: 1,
-  innerAtmosphereStrength: 0.7,
-  lightIntensity: 0.81,
+  innerAtmosphereStrength: 0.54,
+  lightIntensity: 0.78,
   lightX: -0.53,
   lightY: 0.23,
   lightZ: 0.38,
   nightLightStrength: 0.012,
   outerAtmosphereSize: 1.002,
-  outerAtmosphereStrength: 0.1,
+  outerAtmosphereStrength: 0.08,
   rotationSpeed: 0.000036,
 });
 
@@ -162,13 +162,13 @@ function createEarthSurfaceMaterial({ dayMap, gradeMap, lightDirection, nightMap
         vec3 gradeMapColor = pow(texture2D(gradeMap, vUv).rgb, vec3(0.96));
         float detailLuma = dot(detailMap, vec3(0.2126, 0.7152, 0.0722));
         float gradeLuma = dot(gradeMapColor, vec3(0.2126, 0.7152, 0.0722));
-        vec3 base = mix(gradeMapColor, detailMap, 0.1);
-        base += (detailMap - vec3(detailLuma)) * 0.12;
-        base += vec3(detailLuma - gradeLuma) * 0.08;
+        vec3 base = mix(gradeMapColor, detailMap, 0.18);
+        base += (detailMap - vec3(detailLuma)) * 0.18;
+        base += vec3(detailLuma - gradeLuma) * 0.12;
         float baseLuma = dot(base, vec3(0.2126, 0.7152, 0.0722));
-        base = mix(vec3(baseLuma), base, 0.82);
-        base = max(vec3(0.0), (base - 0.04) * 1.1 + 0.04);
-        base *= vec3(0.82, 0.87, 0.96);
+        base = mix(vec3(baseLuma), base, 0.9);
+        base = max(vec3(0.0), (base - 0.035) * 1.16 + 0.035);
+        base *= vec3(0.86, 0.91, 1.0);
 
         vec3 n = surfaceNormal(normalize(vWorldNormal));
         vec3 l = normalize(lightDirection);
@@ -187,12 +187,16 @@ function createEarthSurfaceMaterial({ dayMap, gradeMap, lightDirection, nightMap
         vec3 landGrade = vec3(0.022, 0.018, 0.012);
         base = mix(base + landGrade * (1.0 - oceanMask), base * vec3(0.12, 0.22, 0.4) + oceanGrade, oceanMask * 0.9);
 
-        vec3 daylightColor = base * (0.035 + pow(daylight, 0.62) * 1.12 * lightIntensity);
-        daylightColor += vec3(0.008, 0.036, 0.09) * pow(daylight, 2.1) * oceanMask;
+        vec3 daylightColor = base * (0.03 + pow(daylight, 0.72) * 1.04 * lightIntensity);
+        daylightColor += vec3(0.006, 0.028, 0.074) * pow(daylight, 2.35) * oceanMask;
+
+        float frontFacing = max(dot(normalize(vWorldNormal), v), 0.0);
+        float directHotspot = pow(daylight, 4.4) * pow(frontFacing, 1.6);
+        daylightColor *= 1.0 - directHotspot * 0.055;
 
         vec3 halfVector = normalize(l + v);
-        float oceanGlint = pow(max(dot(n, halfVector), 0.0), 112.0) * oceanMask * smoothstep(0.0, 0.62, ndl);
-        daylightColor += vec3(0.34, 0.58, 0.86) * oceanGlint * 0.22 * lightIntensity;
+        float oceanGlint = pow(max(dot(n, halfVector), 0.0), 160.0) * oceanMask * smoothstep(0.08, 0.68, ndl);
+        daylightColor += vec3(0.28, 0.5, 0.78) * oceanGlint * 0.12 * lightIntensity;
 
         float cityLight = max(max(texture2D(nightMap, vUv).r, texture2D(nightMap, vUv).g), texture2D(nightMap, vUv).b);
         vec3 nightColor = base * mix(vec3(0.012, 0.016, 0.028), vec3(0.002, 0.004, 0.011), darkWeight) + vec3(0.0, 0.0008, 0.004);
@@ -200,13 +204,13 @@ function createEarthSurfaceMaterial({ dayMap, gradeMap, lightDirection, nightMap
 
         vec3 color = mix(nightColor, daylightColor, terminator);
         color *= mix(1.0, mix(0.5, 0.34, edgeWeight), limb);
-        color += vec3(0.0, 0.032, 0.13) * pow(limb, 3.2) * smoothstep(-0.12, 0.78, ndl);
-        color += vec3(0.012, 0.055, 0.15) * pow(limb, 6.2) * softDay;
+        color += vec3(0.0, 0.025, 0.105) * pow(limb, 3.4) * smoothstep(-0.12, 0.78, ndl);
+        color += vec3(0.009, 0.044, 0.13) * pow(limb, 6.6) * softDay;
         color = pow(color, vec3(1.02));
         float luminance = dot(color, vec3(0.2126, 0.7152, 0.0722));
         color = mix(vec3(luminance), color, 0.9);
-        color = max(vec3(0.0), (color - 0.02) * 1.08 + 0.02);
-        color *= vec3(0.88, 0.95, 1.04);
+        color = max(vec3(0.0), (color - 0.022) * 1.1 + 0.022);
+        color *= vec3(0.9, 0.96, 1.035);
 
         gl_FragColor = vec4(color, 1.0);
         #include <colorspace_fragment>
@@ -260,10 +264,10 @@ function createCloudMaterial(texture, lightDirection, settings) {
         float light = smoothstep(-0.08, 0.74, day);
         float viewFacing = max(dot(normalize(vViewNormal), vec3(0.0, 0.0, 1.0)), 0.0);
         float limb = pow(1.0 - viewFacing, 2.35);
-        float alpha = density * opacity * mix(0.025, 0.9, light) * mix(0.58, 1.04, viewFacing);
-        vec3 color = mix(vec3(0.18, 0.21, 0.28), vec3(0.96, 0.965, 0.94) * lightIntensity, light);
-        color += vec3(0.018, 0.065, 0.15) * limb * light;
-        color = max(vec3(0.0), (color - 0.035) * 1.1 + 0.035);
+        float alpha = density * opacity * mix(0.018, 0.68, light) * mix(0.48, 0.92, viewFacing);
+        vec3 color = mix(vec3(0.13, 0.16, 0.23), vec3(0.9, 0.92, 0.9) * lightIntensity, light);
+        color += vec3(0.012, 0.052, 0.13) * limb * light;
+        color = max(vec3(0.0), (color - 0.04) * 1.16 + 0.04);
 
         gl_FragColor = vec4(color, alpha);
         #include <colorspace_fragment>
@@ -314,9 +318,9 @@ function createCloudShadowMaterial(texture, lightDirection, settings) {
         float day = dot(normalize(vWorldNormal), normalize(lightDirection));
         float light = smoothstep(-0.1, 0.72, day);
         float viewFacing = max(dot(normalize(vViewNormal), vec3(0.0, 0.0, 1.0)), 0.0);
-        float alpha = density * opacity * 0.22 * light * smoothstep(0.08, 0.88, viewFacing);
+        float alpha = density * opacity * 0.17 * light * smoothstep(0.08, 0.88, viewFacing);
 
-        gl_FragColor = vec4(0.0, 0.0, 0.0, clamp(alpha, 0.0, 0.22));
+        gl_FragColor = vec4(0.0, 0.0, 0.0, clamp(alpha, 0.0, 0.18));
       }
     `,
   });
@@ -352,7 +356,7 @@ function createTerminatorMaterial(lightDirection, settings) {
         float day = dot(normalize(vWorldNormal), normalize(lightDirection));
         float night = smoothstep(0.28, -0.08, day);
         float limb = pow(1.0 - max(dot(normalize(vViewNormal), vec3(0.0, 0.0, 1.0)), 0.0), 1.08);
-        float alpha = clamp(night * mix(0.16, 0.84, darkStrength) + limb * blackRimStrength * 0.055, 0.0, 0.82);
+        float alpha = clamp(night * mix(0.16, 0.84, darkStrength) + limb * blackRimStrength * 0.072, 0.0, 0.84);
 
         gl_FragColor = vec4(0.0, 0.0, 0.0, alpha);
       }
@@ -383,9 +387,9 @@ function createSilhouetteMaterial(settings) {
 
       void main() {
         float viewRim = 1.0 - abs(dot(normalize(vViewNormal), vec3(0.0, 0.0, 1.0)));
-        float ink = smoothstep(0.78, 0.986, viewRim);
-        float hardInk = smoothstep(0.9, 0.998, viewRim);
-        float alpha = (ink * 0.16 + hardInk * 0.92) * blackRimStrength;
+        float ink = smoothstep(0.7, 0.984, viewRim);
+        float hardInk = smoothstep(0.88, 0.997, viewRim);
+        float alpha = (ink * 0.28 + hardInk * 1.06) * blackRimStrength;
 
         gl_FragColor = vec4(0.0, 0.0, 0.0, clamp(alpha, 0.0, 1.0));
       }
@@ -416,11 +420,11 @@ function createEdgeShadowMaterial(settings) {
       void main() {
         vec3 normal = normalize(vViewNormal);
         float viewRim = 1.0 - max(dot(normal, vec3(0.0, 0.0, 1.0)), 0.0);
-        float softRing = smoothstep(0.78, 0.985, viewRim);
-        float hardRing = smoothstep(0.91, 0.996, viewRim);
-        float alpha = (softRing * 0.08 + hardRing * 0.58) * blackRimStrength;
+        float softRing = smoothstep(0.76, 0.982, viewRim);
+        float hardRing = smoothstep(0.9, 0.996, viewRim);
+        float alpha = (softRing * 0.12 + hardRing * 0.72) * blackRimStrength;
 
-        gl_FragColor = vec4(0.0, 0.0, 0.0, clamp(alpha, 0.0, 0.78));
+        gl_FragColor = vec4(0.0, 0.0, 0.0, clamp(alpha, 0.0, 0.88));
       }
     `,
   });
@@ -463,8 +467,8 @@ function createAtmosphereMaterial(lightDirection, settings) {
         float hardRim = smoothstep(0.82, 1.0, viewRim);
         float day = smoothstep(-0.18, 0.66, dot(worldNormal, normalize(lightDirection)));
         vec3 color = mix(atmosphereColor * 0.18, atmosphereColor, day);
-        float alpha = (rim * mix(0.01, 0.12, day) + hardRim * day * 0.28) * outerAtmosphereStrength * 1.85;
-        gl_FragColor = vec4(color, clamp(alpha, 0.0, 0.32));
+        float alpha = (rim * mix(0.006, 0.09, day) + hardRim * day * 0.2) * outerAtmosphereStrength * 1.55;
+        gl_FragColor = vec4(color, clamp(alpha, 0.0, 0.24));
         #include <colorspace_fragment>
       }
     `,
@@ -507,9 +511,9 @@ function createInnerAtmosphereMaterial(lightDirection, settings) {
         float ring = smoothstep(0.44, 0.98, viewRim) * day;
         float core = smoothstep(0.78, 1.0, viewRim) * day;
         vec3 color = mix(atmosphereColor * 0.26, atmosphereColor, day);
-        float alpha = (ring * 0.1 + core * 0.34) * innerAtmosphereStrength * 1.5;
+        float alpha = (ring * 0.07 + core * 0.24) * innerAtmosphereStrength * 1.28;
 
-        gl_FragColor = vec4(color, clamp(alpha, 0.0, 0.42));
+        gl_FragColor = vec4(color, clamp(alpha, 0.0, 0.3));
         #include <colorspace_fragment>
       }
     `,
@@ -561,16 +565,16 @@ function createCompositePass(renderer, isMobile) {
 
         vec3 blur = (left.rgb + right.rgb + up.rgb + down.rgb) * 0.25;
         vec3 detail = center.rgb - blur;
-        vec3 color = center.rgb + detail * 0.34;
+        vec3 color = center.rgb + detail * 0.42;
 
         float luma = dot(color, vec3(0.2126, 0.7152, 0.0722));
         color = mix(vec3(luma), color, 1.02);
-        color = max(vec3(0.0), (color - 0.03) * 1.08 + 0.03);
+        color = max(vec3(0.0), (color - 0.032) * 1.11 + 0.032);
         color *= vec3(0.95, 0.99, 1.035);
 
         float neighborAlpha = max(max(left.a, right.a), max(up.a, down.a));
-        float alpha = max(center.a, neighborAlpha * 0.018);
-        vec3 edgeInk = mix(color, vec3(0.0), smoothstep(0.02, 0.36, neighborAlpha - center.a) * 0.22);
+        float alpha = max(center.a, neighborAlpha * 0.012);
+        vec3 edgeInk = mix(color, vec3(0.0), smoothstep(0.015, 0.28, neighborAlpha - center.a) * 0.3);
 
         gl_FragColor = vec4(edgeInk, alpha);
         #include <colorspace_fragment>
@@ -674,7 +678,7 @@ export async function createHeroEarth({
   }
 
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 0.94;
+  renderer.toneMappingExposure = 0.9;
 
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(25.5, 1, 0.1, 100);
@@ -704,7 +708,7 @@ export async function createHeroEarth({
 
   const earthGeometry = new THREE.SphereGeometry(1, isMobile ? 72 : 112, isMobile ? 48 : 72);
   const silhouette = new THREE.Mesh(
-    new THREE.SphereGeometry(1.026, isMobile ? 72 : 112, isMobile ? 48 : 72),
+    new THREE.SphereGeometry(1.031, isMobile ? 72 : 112, isMobile ? 48 : 72),
     createSilhouetteMaterial(tuning),
   );
   silhouette.rotation.y = initialRotationY;
